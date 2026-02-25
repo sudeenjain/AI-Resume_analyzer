@@ -1,0 +1,8 @@
+{
+  "name": "AI Resume Architect",
+  "description": "An AI-powered resume generator that analyzes GitHub and LinkedIn data to create tailored, ATS-optimized resumes.",
+  "requestFramePermissions": [
+    "clipboardWrite",
+    "clipboardRead"
+  ]
+}
