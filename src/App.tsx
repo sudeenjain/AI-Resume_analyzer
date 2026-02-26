@@ -98,9 +98,9 @@ const ROLES = [
 // --- AI Service ---
 
 const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Gemini API key not found. Please set it in the Secrets panel.");
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!apiKey || apiKey === "your_gemini_api_key") {
+    throw new Error("Gemini API key is missing or is still the default placeholder. Please update VITE_GEMINI_API_KEY in your .env file.");
   }
   return new GoogleGenAI({ apiKey });
 };

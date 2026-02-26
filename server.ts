@@ -8,8 +8,7 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } fro
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
-
+const PORT = process.env.PORT ? Number(process.env.PORT) : 5000;
 app.use(express.json());
 
 app.use("/api", (req, res, next) => {
@@ -19,7 +18,7 @@ app.use("/api", (req, res, next) => {
 
 // Check for required env variables
 const checkEnv = () => {
-  const required = ['GITHUB_TOKEN', 'ADZUNA_APP_ID', 'ADZUNA_API_KEY', 'GEMINI_API_KEY'];
+  const required = ['GITHUB_TOKEN', 'ADZUNA_APP_ID', 'ADZUNA_API_KEY', 'VITE_GEMINI_API_KEY'];
   required.forEach(key => {
     if (!process.env[key]) {
       console.warn(`[WARNING] Missing environment variable: ${key}`);
@@ -35,7 +34,11 @@ checkEnv();
 // GitHub Analysis
 app.post("/api/github/fetch", async (req, res) => {
   const { username } = req.body;
-  const token = process.env.GITHUB_TOKEN;
+  let token = process.env.GITHUB_TOKEN;
+  // Ignore placeholder token
+  if (token === "your_github_personal_access_token") {
+    token = "";
+  }
 
   try {
     const headers = token ? { Authorization: `token ${token}` } : {};
@@ -74,8 +77,10 @@ app.post("/api/github/fetch", async (req, res) => {
 
     if (status === 404) {
       message = `GitHub user "${username}" not found. Please check the spelling.`;
+    } else if (status === 401) {
+      message = "GitHub API authentication failed ('Bad credentials'). Please update GITHUB_TOKEN in your .env file with a valid Personal Access Token.";
     } else if (status === 403) {
-      message = "GitHub API rate limit exceeded. Please try again later.";
+      message = "GitHub API rate limit exceeded. Please provide a GITHUB_TOKEN in .env for higher limits.";
     } else if (error.response?.data?.message) {
       message = error.response.data.message;
     }
@@ -89,6 +94,11 @@ app.post("/api/jobs/search", async (req, res) => {
   const { company, role } = req.body;
   const appId = process.env.ADZUNA_APP_ID;
   const apiKey = process.env.ADZUNA_API_KEY;
+
+  if (appId === "your_adzuna_app_id" || apiKey === "your_adzuna_api_key") {
+    console.warn("[WARNING] Adzuna API placeholders found. Returning fallback keywords.");
+    return res.json({ jobs: [] }); // Returning empty allows frontend to use fallback keywords
+  }
 
   try {
     const response = await axios.get(`https://api.adzuna.com/v1/api/jobs/us/search/1`, {
@@ -190,17 +200,52 @@ app.all("/api/*", (req, res) => {
 // --- Vite Integration ---
 
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  }
+  try {
+    if (process.env.NODE_ENV !== "production") {
+      const vite = await createViteServer({
+        server: {
+          middlewareMode: true,
+          hmr: {
+            port: 24679, // prevents clash if 24678 stuck
+          },
+        },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } else {
+      // Serve static files from the dist directory
+      const path = await import("path");
+      const express = await import("express");
+      const distPath = path.resolve(process.cwd(), "dist");
+      app.use(express.static(distPath));
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+      // Handle SPA routing: serve index.html for all non-API routes
+      app.get("*", (req, res) => {
+        if (!req.url.startsWith("/api")) {
+          res.sendFile(path.join(distPath, "index.html"));
+        }
+      });
+    }
+
+    app.listen(PORT, "0.0.0.0")
+      .on("listening", () => {
+        console.log(`🚀 Server running on http://localhost:${PORT}`);
+      })
+      .on("error", (err: any) => {
+        if (err.code === "EADDRINUSE") {
+          console.error(`❌ Port ${PORT} is already in use.`);
+          console.error(`👉 Try running on a different port:`);
+          console.error(`   $env:PORT=5001; npm run dev`);
+        } else {
+          console.error("Server error:", err);
+        }
+        process.exit(1);
+      });
+
+  } catch (error) {
+    console.error("Failed to start server:", error);
+    process.exit(1);
+  }
 }
 
 startServer();
