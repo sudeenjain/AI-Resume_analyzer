@@ -1,5 +1,5 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
+// 🚀 Vite import moved to dynamic import inside startServer for Vercel compatibility
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import axios from "axios";
@@ -197,11 +197,22 @@ app.all("/api/*", (req, res) => {
   res.status(404).json({ error: `API route not found: ${req.method} ${req.url}` });
 });
 
+// Error handling middleware
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error("Global Error Handler:", err);
+  res.status(500).json({
+    error: "Internal Server Error",
+    message: err.message,
+    stack: process.env.NODE_ENV === "production" ? undefined : err.stack
+  });
+});
+
 // --- Vite Integration ---
 
 async function startServer() {
   try {
     if (process.env.NODE_ENV !== "production") {
+      const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
         server: {
           middlewareMode: true,

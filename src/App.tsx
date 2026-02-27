@@ -227,10 +227,17 @@ export default function App() {
           body: JSON.stringify({ username: githubUsername })
         });
 
-        const githubData = await githubRes.json();
+        const contentType = githubRes.headers.get("content-type");
+        let githubData;
+        if (contentType && contentType.includes("application/json")) {
+          githubData = await githubRes.json();
+        } else {
+          const text = await githubRes.text();
+          throw new Error(`Server returned non-JSON response: ${text.slice(0, 100)}...`);
+        }
 
         if (!githubRes.ok) {
-          throw new Error(githubData.error || `GitHub Error: ${githubRes.status}`);
+          throw new Error(githubData?.error || `GitHub Error: ${githubRes.status}`);
         }
 
         setLoadingMessage("Analyzing technical profile...");
@@ -321,13 +328,20 @@ export default function App() {
         body: JSON.stringify(targetJob)
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || `Job Search Error: ${res.status}`);
+      const contentType = res.headers.get("content-type");
+      let searchData;
+      if (contentType && contentType.includes("application/json")) {
+        searchData = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(`Server returned non-JSON response: ${text.slice(0, 100)}...`);
       }
 
-      const jobs = data.jobs;
+      if (!res.ok) {
+        throw new Error(searchData?.error || `Job Search Error: ${res.status}`);
+      }
+
+      const jobs = searchData.jobs;
 
       if (jobs.length > 0) {
         const ai = getAI();
@@ -660,8 +674,15 @@ export default function App() {
         a.click();
         a.remove();
       } else {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to generate Word document");
+        const contentType = res.headers.get("content-type");
+        let errorData;
+        if (contentType && contentType.includes("application/json")) {
+          errorData = await res.json();
+        } else {
+          const text = await res.text();
+          throw new Error(`Server error: ${text.slice(0, 100)}...`);
+        }
+        throw new Error(errorData?.error || "Failed to generate Word document");
       }
     } catch (err: any) {
       console.error("Word generation failed:", err);
